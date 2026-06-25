@@ -1,5 +1,10 @@
 # Cytokine/Chemokine PCA and Clustering Analysis
 
+## TO VIEW VISUAL R MARKDOWN FILE WITH DISPLAYS:
+
+https://rpubs.com/jackcleary13/1444470
+
+
 ## Procedure Overview
 
 This repository contains an R Markdown workflow for dimensionality reduction and clustering of cytokine expression data. The analysis demonstrates how PCA and clustering methods can be applied to distinguish biological groups based on cytokine profiles.
