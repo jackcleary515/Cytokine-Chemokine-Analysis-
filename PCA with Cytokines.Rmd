@@ -1,0 +1,210 @@
+---
+title: "Clustering of Cytokines"
+author: "Jack Cleary"
+date: "2026-04-10"
+output: html_document
+---
+
+```{r}
+
+# NEEDED PACKAGES:
+
+suppressPackageStartupMessages({
+
+library(ggplot2)
+library(car)
+library(dplyr)
+library(tidyverse)
+library(dendextend)
+library(pheatmap)
+})
+
+```
+
+
+
+```{r}
+
+# 1. Prepare the data set
+
+set.seed(123)
+
+cytokine_df <- data.frame(
+  Group = rep(c("Control", "Sepsis"), each = 30),
+  IL6 = c(rnorm(30, 5, 1), rnorm(30, 15, 5)),
+  TNFa = c(rnorm(30, 10, 2), rnorm(30, 20, 4)),
+  IL10 = c(rnorm(30, 8, 2), rnorm(30, 12, 3)),
+  IFNg = c(rnorm(30, 7, 1.5), rnorm(30, 14, 3)),
+  IL1b = c(rnorm(30, 6, 1), rnorm(30, 18, 4))
+)
+
+head(cytokine_df)
+
+
+write.csv(cytokine_df, "cytokine_data.csv", row.names = FALSE)
+```
+
+```{r}
+
+# 2. Clean the data set
+
+## Remove non-numeric columns to create an analyte only data set
+
+analyte_df <- cytokine_df[sapply(cytokine_df, is.numeric)]
+head(analyte_df)
+
+group <- cytokine_df$Group
+group
+
+## Check for missing values
+
+sum(is.na(analyte_df))
+analyte_df <- na.omit(analyte_df)
+nrow(analyte_df)
+
+# Scale the data
+
+analyte_df <- scale(analyte_df)
+head(analyte_df)
+
+```
+```{r}
+
+# 3. Run PCA
+
+pca_cytokines <- prcomp(analyte_df) # don't scale and center again as we have already done that
+summary(pca_cytokines)
+
+# Calculate the percent variance explained
+
+percent_var <- round(100 * pca_cytokines$sdev^2 / sum(pca_cytokines$sdev^2), 1)
+percent_var # this can just be accessed in summary though
+
+# Make the scree plot to determine which components (PCs) matter
+
+scree_df <- data.frame(
+  PC = 1:length(percent_var),
+  variance = percent_var
+)
+head(scree_df)
+
+ggplot(scree_df, aes(PC, variance))+
+  geom_col(fill = scree_df$PC) +
+  geom_line(colour = "red") +
+  geom_point() +
+  xlab("Principal Components") +
+  ylab("% Variance Explained") +
+  labs(title = "Significance of Components")
+ 
+
+  
+# Plot the PCA
+
+plot(pca_cytokines$x[,1], pca_cytokines$x[,2],
+     xlab = "PC1",
+     ylab = "PC2",
+     main = "PCA of Cytokines",
+     col = as.factor(group),
+     pch = 19)
+legend("topright", legend = levels(as.factor(group)), col = 1:length(levels((as.factor(group)))), pch = 19)
+
+
+pca_df <- data.frame(
+  PC1 = pca_cytokines$x[,1],
+  PC2 = pca_cytokines$x[,2],
+  Group = as.factor(group))
+
+
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Group, fill = Group)) +
+  geom_point(shape = 21, size = 3) +
+  stat_ellipse(geom = "polygon", level = 0.95, alpha = 0.2) +
+  labs(title = "PCA of Cytokines", x = "PC1", y = "PC2") +
+  theme_minimal()
+
+loadings <- as.data.frame(pca_cytokines$rotation)
+loadings <- loadings %>% 
+  arrange(desc(PC1)) %>% 
+  mutate(cytokine = rownames(loadings)) %>% 
+  relocate(cytokine)
+  
+loadings
+
+# Tells us the "loadings", which cytokines contribute most to the each PC
+
+# Plot the loadings of PC1
+
+ggplot(loadings, aes(x = cytokine, y = PC1, color = cytokine, fill = cytokine))+
+  geom_col()+
+  labs(x = "Cytokine", y = "PC1", title = "Loadings")+
+  theme_classic()
+
+
+```
+
+
+
+```{r}
+
+# 4. Perform Hierarchical Clustering
+
+# Make the distance matrix
+
+dist_matrix <- dist(analyte_df)
+head(dist_matrix)
+
+# Make the tree
+h_cluster <- hclust(dist_matrix)
+h_cluster <- color_labels(h_cluster, k=2) # start k as number of groups ("Sepsis", "Control")
+par(mar = c(8,4,4,2))
+plot(h_cluster,
+     main = "Hierarchial Clustering of Cytokine Samples")
+
+## Cut into clusters
+
+clusters <-cutree(h_cluster, k = 2)
+
+table(clusters, group) # Successfully clustered all samples separately based on experimental groups
+
+
+```
+
+
+```{r}
+# 5. Perform K Means Clustering (another method of clustering)
+
+## Note: This is better utilized on larger data sets
+
+set.seed(123)
+k_cluster <- kmeans(dist_matrix, centers = 2) # number of classes
+k_cluster
+
+## Plot the clusters on the PCA
+
+plot(pca_cytokines$x[,1], pca_cytokines$x[,2],
+     col = k_cluster$cluster,
+     pch = 19,
+     main = "K-means Clustering on PCA",
+     xlab = "PC1",
+     ylab = "PC2")
+```
+
+
+```{r}
+# 6. Make a Heat Map
+
+heatmap(analyte_df, scale = "none", Rowv = NA, Colv = NA)
+
+heatmap(analyte_df, scale = "none") # With the dendogram 
+
+## Make a heat map with pheatmap package
+
+annotation <- data.frame("Treatment" = cytokine_df$Group)
+rownames(annotation) <- rownames(cytokine_df)
+head(annotation)
+
+ann_colors <- list(Group = c(Control = "blue", Sepsis = "red"))
+
+pheatmap(analyte_df, scale = "none", annotation_row = annotation, annotation_colors = ann_colors, show_rownames = FALSE)
+```
+
+

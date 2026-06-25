@@ -1,0 +1,7 @@
+.Rproj.user
+.RData
+.Rhistory
+*_cache/
+*_files/
+renv/library/
+renv/staging/
